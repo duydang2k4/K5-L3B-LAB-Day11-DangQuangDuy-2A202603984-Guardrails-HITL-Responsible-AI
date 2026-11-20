@@ -23,9 +23,14 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[2]
 
 try:
-    from dotenv import load_dotenv
+    from dotenv import dotenv_values, load_dotenv
 
     load_dotenv(_ROOT / ".env")
+    # The repo's explicit provider choice wins over stale terminal variables.
+    # Keep the usual environment precedence for credentials and other settings.
+    _env_provider = dotenv_values(_ROOT / ".env").get("RED_TEAM_PROVIDER")
+    if _env_provider:
+        os.environ["RED_TEAM_PROVIDER"] = _env_provider.strip()
 except ImportError:
     pass
 
@@ -139,7 +144,12 @@ def get_red_provider() -> str:
     ).strip().lower()
     if raw in {"gemini", "google", "adk"}:
         return PROVIDER_GEMINI
-    return PROVIDER_OPENAI
+    if raw == "openai":
+        return PROVIDER_OPENAI
+    raise ValueError(
+        "RED_TEAM_PROVIDER must be 'openai' or 'gemini'. "
+        "Put Gemini credentials in GOOGLE_API_KEY, not in RED_TEAM_PROVIDER."
+    )
 
 
 def get_red_model() -> str:

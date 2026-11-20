@@ -122,6 +122,7 @@ def summarize_artifacts(submission: Path) -> dict:
         "framework": None,
         "defense": {},
         "red_team": {},
+        "defense_run_error": _load_json(submission / "outputs" / "suite_error.json") if results is None else None,
     }
     if isinstance(results, dict):
         summary["framework"] = results.get("framework")
@@ -169,6 +170,7 @@ def write_lab_report_md(submission: Path, report: dict, out_md: Path) -> Path:
     art = report.get("artifact_summary", {})
     defense = art.get("defense") or {}
     red = art.get("red_team") or {}
+    run_error = art.get("defense_run_error") or {}
 
     def yn(ok: bool | None) -> str:
         if ok is True:
@@ -199,6 +201,9 @@ def write_lab_report_md(submission: Path, report: dict, out_md: Path) -> Path:
         "",
         f"- Valid: **{schema.get('ok')}**",
         f"- Error: `{schema.get('error')}`",
+        f"- Last defense run error: `{run_error.get('error_type', 'none')}`; "
+        f"HTTP status: `{run_error.get('http_status', 'none')}`; "
+        f"request: `{run_error.get('request_id', 'none')}`.",
         "",
         "## Defense snapshot (từ `results.json`)",
         "",

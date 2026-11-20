@@ -9,6 +9,8 @@ Gemini Red Team dùng Google ADK trong agents/*.py — không đi qua file này.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import asyncio
+import time
 from typing import Any, Callable
 
 from core.config import (
@@ -45,11 +47,27 @@ class OpenAIRunner:
     client_kwargs: dict = field(default_factory=dict)
     input_hooks: list[Callable[[str], str | None]] = field(default_factory=list)
     output_hooks: list[Callable[[str], str]] = field(default_factory=list)
+    _last_blue_request: float | None = field(default=None, init=False, repr=False)
+    _blue_client: Any = field(default=None, init=False, repr=False)
 
     def _client(self):
         from openai import OpenAI
 
-        return OpenAI(**(self.client_kwargs or {}))
+        if self.provider == "openrouter" and self._blue_client is not None:
+            return self._blue_client
+        kwargs = dict(self.client_kwargs or {})
+        if self.provider == "openrouter":
+            kwargs.update(max_retries=0, timeout=45.0)
+        client = OpenAI(**kwargs)
+        if self.provider == "openrouter":
+            self._blue_client = client
+        return client
+
+    def close(self):
+        """Release the pooled Blue connection after a suite finishes or fails."""
+        if self._blue_client is not None:
+            self._blue_client.close()
+            self._blue_client = None
 
     async def chat(self, agent: OpenAIAgent, user_message: str) -> str:
         for hook in self.input_hooks:
@@ -62,6 +80,11 @@ class OpenAIRunner:
             return block_msg
 
         client = self._client()
+        if self.provider == "openrouter":
+            # Pace actual model calls, not inputs rejected locally by plugins.
+            if self._last_blue_request is not None:
+                await asyncio.sleep(max(0.0, 4.0 - (time.monotonic() - self._last_blue_request)))
+            self._last_blue_request = time.monotonic()
         completion = client.chat.completions.create(
             model=self.model,
             messages=[
@@ -69,6 +92,7 @@ class OpenAIRunner:
                 {"role": "user", "content": user_message},
             ],
             temperature=self.temperature,
+            **({"max_tokens": 1024} if self.provider == "openrouter" else {}),
         )
         text = (completion.choices[0].message.content or "").strip()
 

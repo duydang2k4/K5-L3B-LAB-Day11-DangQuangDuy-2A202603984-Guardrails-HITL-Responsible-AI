@@ -41,12 +41,17 @@ def content_filter(response: str) -> dict:
 
     # PII patterns to check
     PII_PATTERNS = {
-        # TODO: Add regex patterns for:
+        # Regex patterns for:
         # - VN phone number: r"0\d{9,10}"
         # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
         # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
         # - API key pattern: r"sk-[a-zA-Z0-9-]+"
         # - Password pattern: r"password\s*[:=]\s*\S+"
+        "phone": r"(?<!\w)(?:0|\+84)[ .-]?(?:\d[ .-]?){8,9}\d(?!\w)",
+        "email": r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}",
+        "national_id": r"\b(?:\d{9}|\d{12})\b",
+        "api_key": r"\bsk-[a-zA-Z0-9_-]+",
+        "password": r"\bpassword\b(?:\s*[:=]\s*|\s+is\s+|\s+)(?:\"[^\"]+\"|'[^']+'|[^\s,;]+)",
     }
 
     for name, pattern in PII_PATTERNS.items():
@@ -172,7 +177,7 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         if not response_text:
             return llm_response
 
-        # TODO: Implement logic:
+        # Filtering logic:
         # 1. Call content_filter(response_text)
         #    - If issues found: replace llm_response.content with redacted version
         #    - Increment self.redacted_count
@@ -181,7 +186,27 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         #    - Increment self.blocked_count
         # 3. Return llm_response (possibly modified)
 
-        return llm_response  # TODO: modify if needed
+        result = content_filter(response_text)
+        if not result["safe"]:
+            llm_response.content = types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=result["redacted"])],
+            )
+            self.redacted_count += 1
+
+        if self.use_llm_judge:
+            verdict = await llm_safety_check(response_text)
+            if not verdict["safe"]:
+                llm_response.content = types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(
+                        text="Xin lỗi, phản hồi này không đáp ứng yêu cầu an toàn. "
+                        "Vui lòng đặt lại câu hỏi về dịch vụ ngân hàng."
+                    )],
+                )
+                self.blocked_count += 1
+
+        return llm_response
 
 
 # ============================================================

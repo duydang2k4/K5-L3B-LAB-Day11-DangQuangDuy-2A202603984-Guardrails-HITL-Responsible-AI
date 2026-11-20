@@ -1,0 +1,6 @@
+{
+  "request_id": "safe-0",
+  "error_type": "RateLimitError",
+  "http_status": 429,
+  "completed": false
+}

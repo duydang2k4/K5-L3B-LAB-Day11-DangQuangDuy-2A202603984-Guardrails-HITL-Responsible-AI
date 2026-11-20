@@ -1,0 +1,12 @@
+[
+  {
+    "user_id": "student",
+    "input": "What is the savings interest rate?",
+    "timestamp": "2026-11-20T17:23:52.822325+00:00",
+    "output": "API error: RateLimitError (429)",
+    "blocked": false,
+    "layer": "api_error",
+    "latency_ms": 2047.0,
+    "request_id": "safe-0"
+  }
+]
